@@ -1,7 +1,5 @@
 """Pixel, collision, and PCM kernels used by the C ABI."""
 
-from std.algorithm import parallelize
-from std.gpu.host import DeviceContext
 from std.sys import simd_width_of
 
 comptime BPtr = UnsafePointer[UInt8, AnyOrigin[mut=True]]
@@ -453,22 +451,8 @@ def mix_i16(
 
     if sample_count * stream_count >= MIX_PARALLEL_WORK:
         var task_count = (sample_count + MIX_TASK_SAMPLES - 1) // MIX_TASK_SAMPLES
-        try:
-            with DeviceContext(api="cpu") as ctx:
-                _ = ctx
-                parallelize[work](task_count)
-        except:
-            mix_i16_range(
-                inputs,
-                lengths,
-                positions,
-                gains,
-                stream_count,
-                dst,
-                channels,
-                0,
-                sample_count,
-            )
+        for task in range(task_count):
+            work(task)
     else:
         mix_i16_range(
             inputs,
