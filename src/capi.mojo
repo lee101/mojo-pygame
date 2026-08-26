@@ -8,7 +8,9 @@ from kernels import (
     blit_rgba,
     group_collisions,
     mask_overlap,
+    mask_overlap_area,
     mix_i16,
+    mix_i16_range,
     rect_collisions,
     resample_linear_i16,
 )
@@ -105,6 +107,33 @@ def mpg_mask_overlap(
     )
 
 
+@export("mpg_mask_overlap_area")
+def mpg_mask_overlap_area(
+    a: Int,
+    aw: Int,
+    ah: Int,
+    b: Int,
+    bw: Int,
+    bh: Int,
+    offset_x: Int,
+    offset_y: Int,
+    row_start: Int,
+    row_end: Int,
+) abi("C") -> Int:
+    return mask_overlap_area(
+        BPtr(unsafe_from_address=a),
+        aw,
+        ah,
+        BPtr(unsafe_from_address=b),
+        bw,
+        bh,
+        offset_x,
+        offset_y,
+        row_start,
+        row_end,
+    )
+
+
 @export("mpg_mask_overlap_into")
 def mpg_mask_overlap_into(
     a: Int,
@@ -153,6 +182,31 @@ def mpg_mix_i16(
         I16Ptr(unsafe_from_address=dst),
         frames,
         channels,
+    )
+
+
+@export("mpg_mix_i16_range")
+def mpg_mix_i16_range(
+    inputs: Int,
+    lengths: Int,
+    positions: Int,
+    gains: Int,
+    stream_count: Int,
+    dst: Int,
+    channels: Int,
+    start_frame: Int,
+    end_frame: Int,
+) abi("C"):
+    mix_i16_range(
+        I64Ptr(unsafe_from_address=inputs),
+        I64Ptr(unsafe_from_address=lengths),
+        I64Ptr(unsafe_from_address=positions),
+        F64Ptr(unsafe_from_address=gains),
+        stream_count,
+        I16Ptr(unsafe_from_address=dst),
+        channels,
+        start_frame * channels,
+        end_frame * channels,
     )
 
 

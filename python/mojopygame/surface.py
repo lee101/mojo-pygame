@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from . import _lib
+from ._parallel import ranges as _parallel_ranges
 from .rect import Rect
 
 SRCALPHA = 65536
@@ -34,6 +35,9 @@ _BLEND_FLAGS = {
     BLEND_PREMULTIPLIED,
     BLEND_ALPHA_SDL2,
 }
+
+_PARALLEL_BLIT_PIXELS = 1_048_576
+_PARALLEL_BLEND_PIXELS = 8_388_608
 
 
 def _color(value, default_alpha=255):
@@ -259,24 +263,35 @@ class Surface:
             sx = sy = 0
 
         key = source._colorkey or (0, 0, 0)
-        _lib.lib().mpg_blit_rgba(
-            _lib.addr(source_pixels),
-            _lib.addr(self._pixels),
-            source_stride,
-            self._pixels.strides[0],
-            sx,
-            sy,
-            clipped_destination.x,
-            clipped_destination.y,
-            clipped_destination.w,
-            clipped_destination.h,
-            special_flags,
-            -1 if source._alpha is None else source._alpha,
-            int(bool(source._flags & SRCALPHA)),
-            int(bool(self._flags & SRCALPHA)),
-            int(source._colorkey is not None),
-            *key,
+        def blit_rows(row_start, row_end):
+            _lib.lib().mpg_blit_rgba(
+                _lib.addr(source_pixels),
+                _lib.addr(self._pixels),
+                source_stride,
+                self._pixels.strides[0],
+                sx,
+                sy + row_start,
+                clipped_destination.x,
+                clipped_destination.y + row_start,
+                clipped_destination.w,
+                row_end - row_start,
+                special_flags,
+                -1 if source._alpha is None else source._alpha,
+                int(bool(source._flags & SRCALPHA)),
+                int(bool(self._flags & SRCALPHA)),
+                int(source._colorkey is not None),
+                *key,
+            )
+
+        parallel_threshold = (
+            _PARALLEL_BLIT_PIXELS
+            if special_flags in (0, BLEND_PREMULTIPLIED, BLEND_ALPHA_SDL2)
+            else _PARALLEL_BLEND_PIXELS
         )
+        if clipped_destination.w * clipped_destination.h >= parallel_threshold:
+            _parallel_ranges(clipped_destination.h, blit_rows)
+        else:
+            blit_rows(0, clipped_destination.h)
         return clipped_destination
 
     def blits(self, blit_sequence, doreturn=1):

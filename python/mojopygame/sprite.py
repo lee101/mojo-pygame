@@ -186,13 +186,17 @@ def _colliding_sprites(sprite, sprites):
     append = result.append
     for item in sprites:
         rect = item.rect
+        rw = rect.w
+        rh = rect.h
+        rx = rect.x
+        ry = rect.y
         if (
-            rect.w > 0
-            and rect.h > 0
-            and rect.x < right
-            and rect.x + rect.w > left
-            and rect.y < bottom
-            and rect.y + rect.h > top
+            rw > 0
+            and rh > 0
+            and rx < right
+            and rx + rw > left
+            and ry < bottom
+            and ry + rh > top
         ):
             append(item)
     return result
@@ -248,7 +252,7 @@ def collide_mask(left, right):
 
 
 def spritecollide(sprite, group, dokill, collided=None):
-    sprites = group.sprites()
+    sprites = group.spritedict
     if collided is None or collided is collide_rect:
         result = _colliding_sprites(sprite, sprites)
     else:
@@ -260,7 +264,7 @@ def spritecollide(sprite, group, dokill, collided=None):
 
 
 def spritecollideany(sprite, group, collided=None):
-    sprites = group.sprites()
+    sprites = group.spritedict
     if collided is None or collided is collide_rect:
         hits = _colliding_sprites(sprite, sprites)
         return hits[0] if hits else None

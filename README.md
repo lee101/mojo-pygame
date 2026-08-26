@@ -89,17 +89,19 @@ operation.
 
 | case | mojopygame | reference | ratio | result |
 | --- | ---: | ---: | ---: | --- |
-| alpha blit 1920x1080 | 9.49 ms | 6.00 ms | 0.63x | slower vs pygame |
-| RGBA add blit 1920x1080 | 2.39 ms | 2.93 ms | 1.23x | faster vs pygame |
-| spritecollide 100k rects | 24.60 ms | 11.04 ms | 0.45x | slower vs pygame |
-| groupcollide 1500x1500 | 36.18 ms | 117.35 ms | 3.24x | faster vs pygame |
-| mask overlap_area 2048x2048 | 0.74 ms | 0.13 ms | 0.17x | slower vs pygame |
-| mix 24 stereo voices, 2 sec | 5.38 ms | 3.63 ms | 0.67x | slower vs NumPy reference |
-| linear resample 10 sec stereo | 3.69 ms | 52.79 ms | 14.32x | faster vs NumPy reference |
+| alpha blit 1920x1080 | 2.84 ms | 5.33 ms | 1.88x | faster vs pygame |
+| RGBA add blit 1920x1080 | 0.92 ms | 0.91 ms | 0.98x | slower vs pygame |
+| spritecollide 100k rects | 17.77 ms | 7.55 ms | 0.42x | slower vs pygame |
+| groupcollide 1500x1500 | 26.01 ms | 125.80 ms | 4.84x | faster vs pygame |
+| mask overlap_area 2048x2048 | 0.52 ms | 0.13 ms | 0.25x | slower vs pygame |
+| mix 24 stereo voices, 2 sec | 2.10 ms | 3.91 ms | 1.86x | faster vs NumPy reference |
+| linear resample 10 sec stereo | 3.79 ms | 122.67 ms | 32.39x | faster vs NumPy reference |
 
 The byte-mask representation trades pygame's compact bit packing for a simple
-NumPy-compatible layout. The C ABI currently uses CPU kernels only; no GPU
-dependency or GPU performance claim is included.
+NumPy-compatible layout. All covered kernels are below roughly two operations
+per byte moved, including blending, mask intersection, mixing, and resampling.
+Host/device transfer and launch overhead therefore make them poor GPU targets;
+the package intentionally remains CPU-only and has no GPU dependency.
 
 ## How it works
 
@@ -119,7 +121,9 @@ carry an explicit row stride across the ABI. Masks are row-major byte maps.
 PCM is C-contiguous
 `int16` with shape `(frames, channels)`. Python clips rectangles and owns all
 allocation and lifetimes; Mojo receives integer addresses and never retains
-them or allocates result buffers.
+them or allocates result buffers. A persistent bounded host worker pool divides
+only large independent row or sample ranges; smaller calls stay serial to avoid
+thread scheduling overhead.
 
 The C ABI uses `@export("name")` and `abi("C")`. Buffers cross as `Int`
 addresses because an exported Mojo function cannot be parametric over pointer

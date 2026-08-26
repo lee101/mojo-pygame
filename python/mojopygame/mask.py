@@ -3,6 +3,10 @@ from __future__ import annotations
 import numpy as np
 
 from . import _lib
+from ._parallel import ranges as _parallel_ranges
+
+
+_PARALLEL_MASK_PIXELS = 8_388_608
 
 
 class Mask:
@@ -51,8 +55,34 @@ class Mask:
         return first
 
     def overlap_area(self, other, offset):
-        count, _ = self._overlap(other, offset)
-        return count
+        if not isinstance(other, Mask):
+            raise TypeError("other must be a Mask")
+        width, height = self.get_size()
+        if width == 0 or height == 0 or other.get_width() == 0 or other.get_height() == 0:
+            return 0
+        ox, oy = (int(v) for v in offset)
+        y0, y1 = max(0, oy), min(height, oy + other.get_height())
+        x0, x1 = max(0, ox), min(width, ox + other.get_width())
+        if x1 <= x0 or y1 <= y0:
+            return 0
+
+        def area_rows(row_start, row_end):
+            return int(_lib.lib().mpg_mask_overlap_area(
+                _lib.addr(self._bits),
+                width,
+                height,
+                _lib.addr(other._bits),
+                other.get_width(),
+                other.get_height(),
+                ox,
+                oy,
+                row_start,
+                row_end,
+            ))
+
+        if (x1 - x0) * (y1 - y0) >= _PARALLEL_MASK_PIXELS:
+            return sum(_parallel_ranges(y1 - y0, lambda start, end: area_rows(y0 + start, y0 + end)))
+        return area_rows(y0, y1)
 
     def overlap_mask(self, other, offset):
         width, height = self.get_size()

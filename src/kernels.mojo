@@ -7,10 +7,6 @@ comptime I16Ptr = UnsafePointer[Int16, AnyOrigin[mut=True]]
 comptime I64Ptr = UnsafePointer[Int64, AnyOrigin[mut=True]]
 comptime F64Ptr = UnsafePointer[Float64, AnyOrigin[mut=True]]
 
-comptime MIX_PARALLEL_WORK = 16777216
-comptime MIX_TASK_SAMPLES = 16384
-
-
 def clamp_u8(value: Int) -> UInt8:
     if value < 0:
         return UInt8(0)
@@ -227,8 +223,7 @@ def blit_rgba(
     key_g: Int,
     key_b: Int,
 ):
-    @parameter
-    def row_work(y: Int):
+    for y in range(height):
         blit_row(
             src,
             dst,
@@ -249,12 +244,6 @@ def blit_rgba(
             key_g,
             key_b,
         )
-
-    # Blits modify an existing destination. Retrying after a partially failed
-    # parallel launch would apply non-idempotent blending twice, so keep this
-    # operation synchronous across the C ABI.
-    for y in range(height):
-        row_work(y)
 
 
 def rect_collisions(target: I64Ptr, rects: I64Ptr, count: Int, hits: BPtr) -> Int:
@@ -355,6 +344,53 @@ def mask_overlap(
     return total
 
 
+def mask_overlap_area(
+    a: BPtr,
+    aw: Int,
+    ah: Int,
+    b: BPtr,
+    bw: Int,
+    bh: Int,
+    offset_x: Int,
+    offset_y: Int,
+    row_start: Int,
+    row_end: Int,
+) -> Int:
+    var x0 = max(offset_x, 0)
+    var y0 = max(max(offset_y, 0), row_start)
+    var x1 = min(offset_x + bw, aw)
+    var y1 = min(min(offset_y + bh, ah), row_end)
+    if x1 <= x0 or y1 <= y0:
+        return 0
+    var overlap_width = x1 - x0
+    comptime W = simd_width_of[DType.uint8]()
+    var total = 0
+    for y in range(y0, y1):
+        var ai = y * aw + x0
+        var bi = (y - offset_y) * bw + x0 - offset_x
+        var x = 0
+        while x + W <= overlap_width:
+            var both = a.load[width=W](ai).ne(UInt8(0)) & (
+                b.load[width=W](bi).ne(UInt8(0))
+            )
+            total += Int(
+                both.select(
+                    SIMD[DType.uint8, W](UInt8(1)),
+                    SIMD[DType.uint8, W](UInt8(0)),
+                ).reduce_add()
+            )
+            x += W
+            ai += W
+            bi += W
+        while x < overlap_width:
+            if a[ai] != 0 and b[bi] != 0:
+                total += 1
+            x += 1
+            ai += 1
+            bi += 1
+    return total
+
+
 def mix_i16_range(
     inputs: I64Ptr,
     lengths: I64Ptr,
@@ -431,40 +467,17 @@ def mix_i16(
     frames: Int,
     channels: Int,
 ):
-    var sample_count = frames * channels
-
-    @parameter
-    def work(task: Int):
-        var start = task * MIX_TASK_SAMPLES
-        var end = min(start + MIX_TASK_SAMPLES, sample_count)
-        mix_i16_range(
-            inputs,
-            lengths,
-            positions,
-            gains,
-            stream_count,
-            dst,
-            channels,
-            start,
-            end,
-        )
-
-    if sample_count * stream_count >= MIX_PARALLEL_WORK:
-        var task_count = (sample_count + MIX_TASK_SAMPLES - 1) // MIX_TASK_SAMPLES
-        for task in range(task_count):
-            work(task)
-    else:
-        mix_i16_range(
-            inputs,
-            lengths,
-            positions,
-            gains,
-            stream_count,
-            dst,
-            channels,
-            0,
-            sample_count,
-        )
+    mix_i16_range(
+        inputs,
+        lengths,
+        positions,
+        gains,
+        stream_count,
+        dst,
+        channels,
+        0,
+        frames * channels,
+    )
 
 
 def resample_linear_i16(

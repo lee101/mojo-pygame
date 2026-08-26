@@ -13,6 +13,10 @@ import wave
 import numpy as np
 
 from . import _lib
+from ._parallel import ranges as _parallel_ranges
+
+
+_PARALLEL_MIX_WORK = 1_048_576
 
 AUDIO_ALLOW_FREQUENCY_CHANGE = 1
 AUDIO_ALLOW_FORMAT_CHANGE = 2
@@ -325,16 +329,26 @@ def _mix_pcm(arrays, positions, gains, frames):
     gains = np.ascontiguousarray(gains, dtype=np.float64).reshape(len(arrays), channels)
     if not np.all(np.isfinite(gains)):
         raise ValueError("gains must be finite")
-    _lib.lib().mpg_mix_i16(
+    arguments = (
         _lib.addr(pointers),
         _lib.addr(lengths),
         _lib.addr(positions),
         _lib.addr(gains),
         len(arrays),
         _lib.addr(result),
-        frames,
         channels,
     )
+    if frames * channels * len(arrays) >= _PARALLEL_MIX_WORK:
+        _parallel_ranges(
+            frames,
+            lambda start, end: _lib.lib().mpg_mix_i16_range(
+                *arguments, start, end
+            ),
+        )
+    else:
+        _lib.lib().mpg_mix_i16(
+            *arguments[:6], frames, channels
+        )
     return result
 
 

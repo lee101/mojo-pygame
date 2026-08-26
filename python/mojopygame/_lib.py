@@ -24,8 +24,10 @@ _SIGNATURES = {
     "mpg_rect_collisions": ([I, I, I, I], I),
     "mpg_group_collisions": ([I, I, I, I, I], I),
     "mpg_mask_overlap": ([I] * 9, I),
+    "mpg_mask_overlap_area": ([I] * 10, I),
     "mpg_mask_overlap_into": ([I] * 10, I),
     "mpg_mix_i16": ([I] * 8, None),
+    "mpg_mix_i16_range": ([I] * 9, None),
     "mpg_resample_linear_i16": ([I, I, I, I, I, F], None),
 }
 

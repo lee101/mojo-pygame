@@ -49,6 +49,18 @@ def test_mask_overlap_simd_tail_matches_upstream():
     assert ours_a.overlap_area(ours_b, offset) == theirs_a.overlap_area(theirs_b, offset)
 
 
+def test_mask_overlap_parallel_threshold_and_tail_matches_reference():
+    a = (rng.random((2049, 4097)) < 0.4).astype(np.uint8)
+    b = (rng.random((2057, 4103)) < 0.3).astype(np.uint8)
+    ours_a = mpg.mask.Mask((a.shape[1], a.shape[0]))
+    ours_b = mpg.mask.Mask((b.shape[1], b.shape[0]))
+    ours_a.bits[...] = a
+    ours_b.bits[...] = b
+    offset = (3, -5)
+    expected = np.count_nonzero(a[:, 3:] & b[5:2054, :4094])
+    assert ours_a.overlap_area(ours_b, offset) == expected
+
+
 def test_mask_mutation_and_overlap_mask_match_upstream():
     ours = mpg.mask.Mask((13, 9))
     theirs = pygame.Mask((13, 9))
