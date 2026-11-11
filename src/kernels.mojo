@@ -76,8 +76,8 @@ def blit_row(
         var byte_count = width * 4
         var byte = 0
         while byte + W <= byte_count:
-            var source = src.load[width=W](si + byte).cast[DType.uint16]()
-            var dest = dst.load[width=W](di + byte).cast[DType.uint16]()
+            var source = src.unsafe_load[width=W](si + byte).cast[DType.uint16]()
+            var dest = dst.unsafe_load[width=W](di + byte).cast[DType.uint16]()
             var blended = min(
                 source + dest, SIMD[DType.uint16, W](UInt16(255))
             ).cast[DType.uint8]()
@@ -104,8 +104,8 @@ def blit_row(
             if lane % 4 == 3:
                 alpha_lanes[lane] = True
         while x + W <= width:
-            var source = src.load[width=N](si).cast[DType.int32]()
-            var dest = dst.load[width=N](di).cast[DType.int32]()
+            var source = src.unsafe_load[width=N](si).cast[DType.int32]()
+            var dest = dst.unsafe_load[width=N](di).cast[DType.int32]()
             var alpha = SIMD[DType.int32, N]()
             var dest_alpha = SIMD[DType.int32, N]()
             comptime for lane in range(N):
@@ -310,8 +310,8 @@ def mask_overlap(
         var bi = (y - offset_y) * bw + x0 - offset_x
         var x = x0
         while x + W <= x1:
-            var both = a.load[width=W](ai).ne(UInt8(0)) & (
-                b.load[width=W](bi).ne(UInt8(0))
+            var both = a.unsafe_load[width=W](ai).ne(UInt8(0)) & (
+                b.unsafe_load[width=W](bi).ne(UInt8(0))
             )
             var values = both.select(
                 SIMD[DType.uint8, W](UInt8(1)),
@@ -370,8 +370,8 @@ def mask_overlap_area(
         var bi = (y - offset_y) * bw + x0 - offset_x
         var x = 0
         while x + W <= overlap_width:
-            var both = a.load[width=W](ai).ne(UInt8(0)) & (
-                b.load[width=W](bi).ne(UInt8(0))
+            var both = a.unsafe_load[width=W](ai).ne(UInt8(0)) & (
+                b.unsafe_load[width=W](bi).ne(UInt8(0))
             )
             total += Int(
                 both.select(
@@ -414,7 +414,7 @@ def mix_i16_range(
             var source = I16Ptr(unsafe_from_address=Int(inputs[stream]))
             var samples = SIMD[DType.float64, W](Float64(0.0))
             if source_index + W <= source_limit:
-                samples = source.load[width=W](source_index).cast[DType.float64]()
+                samples = source.unsafe_load[width=W](source_index).cast[DType.float64]()
             else:
                 for lane in range(W):
                     if source_index + lane < source_limit:
